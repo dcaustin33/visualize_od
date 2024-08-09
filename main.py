@@ -1,11 +1,13 @@
-import streamlit as st
+
 import json
 import os
+import random
 from typing import Any, Dict, List
+
 import cv2
 import numpy as np
+import streamlit as st
 from PIL import Image
-import random
 
 
 def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
@@ -82,22 +84,25 @@ def main():
 
     input_file = st.text_input(
         "Path to input JSONL file",
-        "/Users/derek/Desktop/cv-training/rt-detr/drone_v2_all_layers.jsonl",
+        "drone_v2_maciullo.jsonl",
     )
     image_dir = st.text_input(
         "Path to image directory",
-        "/Users/derek/Desktop/cv-training/datasets/drone_dataset/valid/images",
+        "dataset",
     )
 
     confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.5, 0.01)
+    data = load_jsonl(input_file)
     if st.button("Show Random Image"):
         if not os.path.exists(input_file):
             st.error("Input JSONL file does not exist.")
         elif not os.path.exists(image_dir):
             st.error("Image directory does not exist.")
         else:
-            data = load_jsonl(input_file)
-            rand_idx = random.randint(0, len(data) - 1)
+            while True:
+                rand_idx = random.randint(0, len(data) - 1)
+                if os.path.exists(os.path.join(image_dir, data[rand_idx]["img_path"])):
+                    break
             combined_image = process_image(
                 data[rand_idx], image_dir, confidence_threshold
             )
