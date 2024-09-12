@@ -8,6 +8,10 @@ import cv2
 import numpy as np
 import streamlit as st
 from PIL import Image
+import torch
+
+from matcher import HungarianMatcher
+from postprocessing import Metrics, box_metrics
 
 
 def load_jsonl(file_path: str) -> List[Dict[str, Any]]:
@@ -79,6 +83,18 @@ def process_image(
     return combined_image
 
 
+def postprocess(file_info: Dict[str, Any], confidence_threshold: float = 0.5, matcher: Any = None) -> Metrics:
+    metrics = box_metrics(
+        preds_logits=torch.tensor(file_info["predictions"]["confidences"]),
+        preds_boxes=torch.tensor(file_info["predictions"]["bboxes"]),
+        target_classes=torch.tensor(file_info["targets"]["bboxes"]),
+        target_boxes=torch.tensor(file_info["targets"]["class_ids"]),
+        matcher=matcher,
+        loss_value=0,
+        confidence_threshold=confidence_threshold,
+    )
+    return metrics
+
 def main():
     st.title("Predictions vs Targets Bounding Boxes")
 
@@ -89,6 +105,11 @@ def main():
     image_dir = st.text_input(
         "Path to image directory",
         "dataset",
+    )
+    matcher = HungarianMatcher(
+        weight_dict={"cost_class": 2, "cost_bbox": 5, "cost_giou": 2},
+        alpha=0.25,
+        gamma=2.0,
     )
 
     confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.5, 0.01)
@@ -106,6 +127,7 @@ def main():
             combined_image = process_image(
                 data[rand_idx], image_dir, confidence_threshold
             )
+            metrics = postprocess(data[rand_idx], matcher=matcher)
 
             st.image(
                 combined_image,

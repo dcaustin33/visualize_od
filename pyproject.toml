@@ -9,6 +9,9 @@ readme = "README.md"
 python = "^3.10"
 streamlit = "^1.37.1"
 opencv-python-headless = "^4.10.0.84"
+torch = "^2.4.1"
+supervision = "^0.23.0"
+torchvision = "^0.19.1"
 
 
 [build-system]
