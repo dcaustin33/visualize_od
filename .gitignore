@@ -1,1 +1,12 @@
-.venv
+*/.venv
+drone_v2_maciullo_r34_3decoder.jsonl
+drone_v2_maciullo_testv5.jsonl
+drone_v2_maciullo.jsonl
+**/maciullo_real_world_drones
+*.zip
+*venv
+*.jsonl
+/datasets
+/dataset
+__pycache__
+.devcontainer

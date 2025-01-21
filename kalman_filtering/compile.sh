@@ -1,0 +1,1 @@
+g++ -std=c++17 test.cpp kalman_filter.cpp -I /opt/homebrew/opt/eigen -o kalman_filter

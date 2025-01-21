@@ -56,29 +56,44 @@ def draw_bounding_boxes(
 
 
 def process_image(
-    file_info: Dict[str, Any], image_dir: str, confidence_threshold: float
+    file_info: Dict[str, Any],
+    file_info_2: Dict[str, Any],
+    image_dir: str,
+    confidence_threshold: float
 ) -> np.ndarray:
     img_path = os.path.join(image_dir, file_info["img_name"])
-    predictions = file_info["predictions"]
+    predictions_1 = file_info["predictions"]
+    predictions_2 = file_info_2["predictions"]
     targets = file_info["targets"]
 
     image = cv2.imread(img_path)
     if image is None:
         raise ValueError(f"Image at path {img_path} could not be loaded.")
 
-    pred_image = image.copy()
-    targ_image = image.copy()
+    pred_image_1 = image.copy()
+    pred_image_2 = image.copy()
+    target_image = image.copy()
 
-    pred_image = draw_bounding_boxes(
-        pred_image,
-        predictions,
+    pred_image_1 = draw_bounding_boxes(
+        pred_image_1,
+        predictions_1,
         is_prediction=True,
         confidence_threshold=confidence_threshold,
     )
-    targ_image = draw_bounding_boxes(targ_image, targets, is_prediction=False)
+    pred_image_2 = draw_bounding_boxes(
+        pred_image_2,
+        predictions_2,
+        is_prediction=True,
+        confidence_threshold=confidence_threshold,
+    )
+    target_image = draw_bounding_boxes(
+        target_image,
+        targets,
+        is_prediction=False,
+    )
     black_bar = np.ones((image.shape[0], 10, 3), dtype=np.uint8)
 
-    combined_image = np.hstack((pred_image, black_bar, targ_image))
+    combined_image = np.hstack((pred_image_1, black_bar, pred_image_2, black_bar, target_image))
     return combined_image
 
 
@@ -106,18 +121,27 @@ def filter(
             all_outputs.append(True)
     return all(all_outputs) if all_outputs else False
 
+def find_idx_2(img_name: str, data_2: List[Dict[str, Any]]) -> int:
+    for i in range(len(data_2)):
+        if data_2[i]["img_name"] == img_name:
+            return i
+    return -1
 
 def main():
-    st.title("Predictions vs Targets Bounding Boxes")
+    st.set_page_config(layout="wide")
+    st.title("Comparison of Two Prediction Sets and Ground Truth")
 
-    input_file = st.text_input(
-        "Path to input JSONL file",
-        "coco_eval.jsonl",
+    input_file_1 = st.text_input(
+        "Path to first input JSONL file",
+        "dv6_normal_r34.jsonl",
+    )
+    input_file_2 = st.text_input(
+        "Path to second input JSONL file",
+        "dv6_synth_r34.jsonl",
     )
     image_dir = st.text_input(
         "Path to image directory",
-        # "maciullo_real_world_drones/train/images",
-        "coco_yolo/valid/images"
+        "drone_v6_normal/valid/images"
     )
     matcher = HungarianMatcher(
         weight_dict={
@@ -130,7 +154,8 @@ def main():
     )
 
     confidence_threshold = st.slider("Confidence Threshold", 0.0, 1.0, 0.5, 0.01)
-    data = load_jsonl(input_file)
+    data_1 = load_jsonl(input_file_1)
+    data_2 = load_jsonl(input_file_2)
     filter_conditions = {}
 
     if st.checkbox("Filter by IOU"):
@@ -153,8 +178,8 @@ def main():
             "False Negatives Greater Than", 0, 100, 0, 1
         )
     if st.button("Show Random Image"):
-        if not os.path.exists(input_file):
-            st.error("Input JSONL file does not exist.")
+        if not os.path.exists(input_file_1) or not os.path.exists(input_file_2):
+            st.error("One or both input JSONL files do not exist.")
         elif not os.path.exists(image_dir):
             st.error("Image directory does not exist.")
         else:
@@ -167,18 +192,39 @@ def main():
                         "Showing random image."
                     )
                     break
-                rand_idx = random.randint(0, len(data) - 1)
+                rand_idx = random.randint(0, min(len(data_1), len(data_2)) - 1)
+                st.write(f"Image name: {data_1[rand_idx]['img_name']}")
                 if not os.path.exists(
-                    os.path.join(image_dir, data[rand_idx]["img_name"])
+                    os.path.join(image_dir, data_1[rand_idx]["img_name"])
                 ):
                     continue
-                metrics = box_metrics(
+                metrics_1 = box_metrics(
                     preds_logits=torch.tensor(
-                        data[rand_idx]["predictions"]["confidences"]
+                        data_1[rand_idx]["predictions"]["confidences"]
                     ).view(-1, 1),
-                    preds_boxes=torch.tensor(data[rand_idx]["predictions"]["bboxes"]),
-                    target_classes=torch.tensor(data[rand_idx]["targets"]["class_ids"]),
-                    target_boxes=torch.tensor(data[rand_idx]["targets"]["bboxes"]),
+                    preds_boxes=torch.tensor(data_1[rand_idx]["predictions"]["bboxes"]),
+                    target_classes=torch.tensor(data_1[rand_idx]["targets"]["class_ids"]),
+                    target_boxes=torch.tensor(data_1[rand_idx]["targets"]["bboxes"]),
+                    matcher=matcher,
+                    loss_value=0,
+                    confidence_threshold=confidence_threshold,
+                    classes=80
+                ).to_dict()
+
+                idx_2 = find_idx_2(data_1[rand_idx]["img_name"], data_2)
+                if idx_2 == -1:
+                    print(f"Could not find {data_1[rand_idx]['img_name']} in data_2")
+                    continue
+                else:
+                    print(f"Found {data_1[rand_idx]['img_name']} in data_2")
+                    print(f"idx_2: {idx_2}. Img: {data_2[idx_2]['img_name']}")
+                    metrics_2 = box_metrics(
+                        preds_logits=torch.tensor(
+                        data_2[idx_2]["predictions"]["confidences"]
+                    ).view(-1, 1),
+                    preds_boxes=torch.tensor(data_2[idx_2]["predictions"]["bboxes"]),
+                    target_classes=torch.tensor(data_2[idx_2]["targets"]["class_ids"]),
+                    target_boxes=torch.tensor(data_2[idx_2]["targets"]["bboxes"]),
                     matcher=matcher,
                     loss_value=0,
                     confidence_threshold=confidence_threshold,
@@ -187,24 +233,32 @@ def main():
 
                 # check if there are any conditions
                 if filter_conditions:
-                    if filter(metrics, **filter_conditions):
+                    if filter(metrics_1, **filter_conditions) or filter(metrics_2, **filter_conditions):
                         break
                 else:
                     break
             combined_image = process_image(
-                data[rand_idx], image_dir, confidence_threshold
+                data_1[rand_idx], data_2[idx_2], image_dir, confidence_threshold
             )
 
             st.image(
                 combined_image,
                 channels="BGR",
-                caption="Predictions (left) vs Targets (right)",
+                caption="Predictions Set 1 (left) vs Predictions Set 2 (middle) vs Ground Truth (right)",
             )
-            st.write(f"F1: {metrics['f1']}")
-            st.write(f"FP: {metrics['fp']}")
-            st.write(f"FN: {metrics['fn']}")
-            st.write(f"TP: {metrics['tp']}")
-            st.write(f"IOU: {metrics['matched_ious']}")
+            st.write("Metrics for Prediction Set 1:")
+            st.write(f"F1: {metrics_1['f1']}")
+            st.write(f"FP: {metrics_1['fp']}")
+            st.write(f"FN: {metrics_1['fn']}")
+            st.write(f"TP: {metrics_1['tp']}")
+            st.write(f"IOU: {metrics_1['matched_ious']}")
+            
+            st.write("Metrics for Prediction Set 2:")
+            st.write(f"F1: {metrics_2['f1']}")
+            st.write(f"FP: {metrics_2['fp']}")
+            st.write(f"FN: {metrics_2['fn']}")
+            st.write(f"TP: {metrics_2['tp']}")
+            st.write(f"IOU: {metrics_2['matched_ious']}")
 
 
 if __name__ == "__main__":
