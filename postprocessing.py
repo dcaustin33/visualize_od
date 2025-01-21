@@ -139,6 +139,7 @@ def box_metrics(
     matcher: torch.nn.Module,
     loss_value: float,
     confidence_threshold: float = 0.5,
+    classes: int = 1
 ):
     """
     Input should be from one image, we will output an object detailing the boxes
@@ -156,9 +157,11 @@ def box_metrics(
         preds_logits.detach(), preds_boxes.detach(), confidence_threshold
     )
     pred_empty = len(pred_boxes) == 0
+    logits = torch.zeros(pred_boxes.shape[0], classes)
+    logits.scatter_(1, pred_labels.unsqueeze(-1), 1)
     pred_input = {
         "pred_boxes": pred_boxes.unsqueeze(0),
-        "pred_logits": all_logits.unsqueeze(0),
+        "pred_logits": logits.unsqueeze(0),
     }
     target = {
         "labels": target_classes,

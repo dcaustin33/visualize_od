@@ -112,11 +112,12 @@ def main():
 
     input_file = st.text_input(
         "Path to input JSONL file",
-        "drone_v2_maciullo_r34_3decoder.jsonl",
+        "coco_eval.jsonl",
     )
     image_dir = st.text_input(
         "Path to image directory",
-        "maciullo_real_world_drones/train/images",
+        # "maciullo_real_world_drones/train/images",
+        "coco_yolo/valid/images"
     )
     matcher = HungarianMatcher(
         weight_dict={
@@ -181,6 +182,7 @@ def main():
                     matcher=matcher,
                     loss_value=0,
                     confidence_threshold=confidence_threshold,
+                    classes=80
                 ).to_dict()
 
                 # check if there are any conditions
